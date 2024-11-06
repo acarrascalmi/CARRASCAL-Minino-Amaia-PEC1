@@ -1,0 +1,8 @@
+\contentsline {section}{Abstract}{1}{section*.2}%
+\contentsline {section}{Objetivos del estudio}{1}{section*.3}%
+\contentsline {section}{Materiales y Métodos}{2}{section*.4}%
+\contentsline {section}{Resultados e interpretacion}{2}{section*.5}%
+\contentsline {subsection}{Generación de un contenedor en formato SummarizedExperiment}{2}{section*.6}%
+\contentsline {subsection}{Exploración de los datos}{3}{section*.7}%
+\contentsline {section}{Discusión y limitaciones y conclusiones del estudio}{6}{section*.8}%
+\contentsline {section}{Direccion del repositorio Git}{7}{section*.9}%

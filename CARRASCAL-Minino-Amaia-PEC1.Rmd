@@ -1,0 +1,266 @@
+---
+title: "AO_PEC1"
+author: "Amaia Carrascal Minino"
+date: "2024-11-04"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Abstract
+
+En este estudio se analizaron muestras de xenoinjertos mediante espectrometría de masas para investigar diferencias en los perfiles de fosfopéptidos entre dos fenotipos, MSS y PD. El objetivo fue identificar fosfopéptidos que permitan diferenciar ambos fenotipos. Para ello, calculamos la diferencia de medias y representamos los fosfopéptidos con diferencias significativas en abundancia ($\alpha = 0.05$), encontrando un total de 50 fosfopéptidos distintos entre los dos grupos.
+
+El análisis visual mediante el gráfico de barras y el gráfico de volcano reveló distintos grados de variación en las abundancias de fosfopéptidos entre MSS y PD. Al realizar un análisis de componentes principales (PCA) para explorar las relaciones entre los fosfopéptidos, observamos que el componente principal 1 (PC1) captura una gran parte de la variabilidad, aunque algunas muestras están muy cercanas entre sí. Este análisis sugiere que ciertos fosfopéptidos son característicos de cada grupo; sin embargo, podrían ser necesarias otras técnicas de análisis o un mayor número de muestras para corroborar su potencial como biomarcadores.
+
+# Objetivos del estudio
+
+Extraer los datos y crear un contenedor en formato SummarizedExperiment para facilitar el análisis comparativo entre los grupos. Nuestro objetivo es identificar fosfopéptidos que permitan diferenciar claramente los dos grupos tumorales mediante análisis estadístico y visualización.
+
+# Materiales y Métodos
+
+En este experimento se han analizado muestras procedentes de modelos de xenoinjertos derivados de pacientes (Patient-Derived Xenografts, PDXs) pertenecientes a dos subtipos tumorales distintos. Se utilizaron muestras enriquecidas en fosfopéptidos, y se llevó a cabo un análisis de espectrometría de masas por cromatografía líquida acoplada a espectrometría de masas (LC-MS) con dos réplicas técnicas por muestra. Estas réplicas fueron tratadas como muestras independientes tanto para el análisis como para la visualización de los datos para este estudio.
+
+El conjunto de resultados consiste en conteos normalizados de señales de MS para aproximadamente 1400 fosfopéptidos. Como se indicó anteriormente, el objetivo es identificar fosfopéptidos que permitan diferenciar los dos grupos tumorales.
+
+Los datos se proporcionaron en un archivo Excel: TIO2+PTYR-human-MSS+MSIvsPD.XLSX.
+
+Los grupos se definen de la siguiente manera:
+
+- Grupo MSS: Muestras M1, M5 y T49.
+- Grupo PD: Muestras M42, M43 y M64.
+Cada muestra cuenta con dos réplicas técnicas, lo que da un total de seis muestras por grupo.
+
+La primera columna, "SequenceModification", contiene las modificaciones para los distintos fosfopéptidos. Existen otras columnas que hemos decidido omitir para el presente análisis.
+
+Para visualizar los datos, hemos creado un gráfico de volcano que muestra las diferencias entre los fosfopéptidos, destacando aquellos con cambios significativos entre los grupos. Posteriormente, generamos un gráfico de barras que compara los fosfopéptidos con diferencias estadísticamente significativas.
+Ajustamos los valores p utilizando el método de la Tasa de Descubrimiento Falso (False Discovery Rate, FDR) para controlar el riesgo de obtener resultados falsos positivos cuando al realizar múltiples pruebas estadísticas al mismo tiempo. 
+
+A continuación, realizamos un análisis de componentes principales (PCA) para explorar si las combinaciones de fosfopéptidos permiten diferenciar claramente las muestras de ambos grupos. Finalmente, creamos un gráfico de las cargas (loadings) de cada componente principal para identificar los fosfopéptidos que más contribuyen a la variabilidad entre las muestras.
+
+
+# Resultados e interpretacion
+
+
+## Generación de un contenedor en formato SummarizedExperiment
+
+Extraemos los datos del archivo Excel y creamos un objeto en formato SummarizedExperiment para facilitar el análisis estructurado. El objeto tiene la siguiente estructura:
+
+
+- **Clase**: `SummarizedExperiment`
+- **Dimensiones**: 1438 filas x 12 columnas
+
+- **Metadatos** (2):
+  - `conditions`: Información sobre las condiciones experimentales.
+  - `description`: Descripción general del experimento.
+
+- **Ensayos (1)**: 
+  - `counts`: Conjunto de datos que contiene los counts de cada fosfopéptido en cada muestra.
+
+- **Nombres de filas (1438 fosfopéptidos)**:
+  - Ejemplos:
+    - `LYPELSQYMGLSLNEEEIR[2] Phospho | [9] Oxidation`
+    - `VDKVIQAQTAFSANPANPAILSEASAPIPHDGNLYPR[35] Phospho`
+    - `YQDEVFGGFVTEPQEESEEEVEEPEER[17] Phospho`
+    - `YSPSQNSPIHHIPSRR[1] Phospho | [7] Phospho`
+
+- **Nombres de los datos de filas (`rowData`)**:
+  - No hay metadatos adicionales asociados a las filas.
+
+- **Nombres de columnas (12 muestras)**:
+  - Ejemplos:
+    - `M1_1_MSS`, `M1_2_MSS`, ..., `M64_1_PD`, `M64_2_PD`
+
+- **Nombres de los datos de columnas (`colData`)** (2):
+  - `SampleID`: Identificador único de cada muestra.
+  - `Phenotype`: Fenotipo al que pertenece cada muestra (por ejemplo, MSS o PD).
+
+
+
+```{r , echo=FALSE, include=FALSE}
+
+# Cargar las librerías necesarias
+library(SummarizedExperiment)
+library(readxl)
+library(ggplot2)
+library(limma)
+
+# Especificar la ruta del archivo en el repositorio
+file_path <- "path/to/TIO2+PTYR-human-MSS+MSIvsPD.XLSX"
+
+# Extraer datos desde el Excel
+MSdata <- read_excel("TIO2+PTYR-human-MSS+MSIvsPD.XLSX", sheet = 1)
+
+# Seleccionar data de las columns de interes, columna 1 para los fofolipidos y columnas 5 a 16 para los datos de abundancia5 to 16
+text_data <- MSdata[, c(1, 5:16)]
+
+# Escribe los datos en de la tabla en formato texto
+write.table(text_data, file = "Text_data.txt", sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
+
+# Seleccionar las columnas 5 a 16 como los datos de ensayo
+assay_data <- as.matrix(MSdata[, 5:16])
+
+# Poner nombres de las filas de los datos de ensayo con la columna de SequenceModifications
+rownames(assay_data) <- MSdata$SequenceModifications
+
+# Extraer el nombre muestra y el fenotipo a partir de los nombres de las columnas
+# Extraer el ID de muestra
+sample_ids <- gsub("_.*", "", colnames(assay_data)) 
+
+# Asignar el fenotipo basado en MSS o PD en los nombres
+phenotypes <- ifelse(grepl("MSS", colnames(assay_data)), "MSS", "PD")  
+
+# Crear un data frame para colData
+col_data <- data.frame(SampleID = sample_ids,Phenotype = phenotypes)
+
+# Poner los nombre de fila a los datos de la s columnas
+rownames(col_data) <- colnames(assay_data) 
+
+# Anhadir metadatos
+experiment_metadata <- list(conditions = c("MSS", "PD"), description = "El conjunto de datos adjunto se obtuvo de un experimento de fosfoproteómica realizado para analizar (3 + 3) modelos PDX de dos subtipos diferentes utilizando muestras enriquecidas de fosfopeptidos. Se realizó un análisis LC-MS de 2 duplicados técnicos en cada muestra. El conjunto de resultados consistió en abundancias normalizadas de señales de MS para aproximadamente 1400 fosfopeptidos. Objetivo del análisis: buscar fosfopeptidos que permitan diferenciar los dos grupos de tumores. Esto debe realizarse con análisis estadístico y visualización. Los datos se han proporcionado en un archivo de Excel: TIO2+PTYR-human-MSS+MSIvsPD.XLSX.")
+
+# Crear el objeto SummarizedExperiment
+se <- SummarizedExperiment( assays = list (counts = assay_data),colData = col_data, metadata = experiment_metadata)
+
+#Guardar el objeto SummarizedExperiment en un contenedor de formato .rda
+save(se,file = "summarized_experiment.rda")
+
+# Ver el objeto SummarizedExperiment
+print (se)
+```
+
+
+## Exploración de los datos
+
+El primer gráfico es un gráfico de volcano que se utiliza para visualizar las diferencias en la abundancia de fosfopéptidos entre dos grupos (MSS y PD). En este gráfico, cada punto representa un fosfopéptido y su posición en los ejes proporciona información sobre la magnitud y la significancia de las diferencias.
+
+Los puntos en color verde representan los fosfopéptidos que cumplen con el criterio de significancia establecido (ajustado p < 0.05). Estos fosfopéptidos muestran diferencias significativas entre los dos grupos. Los puntos en negro o gris representan fosfopéptidos sin diferencias estadísticamente significativas entre los grupos. Como se puede ver bastantes fosfopéptidos muestran diferencias significativas.
+
+Para visualizar estas diferencias mas claramente, filtramos los fosfopéptidosque presentan diferencias y los representamos en un grafico barras.Este gráfico de barras permite una visualización clara de cómo varía la abundancia de cada fosfopéptido entre los dos grupos. Los fosfopéptidos que muestran diferencias marcadas en abundancia entre MSS y PD podrían ser potenciales indicadores de diferencias biológicas entre los grupos y pueden ser relevantes.
+
+
+```{r warning=FALSE, , echo=FALSE}
+# Extraemos datos de se
+counts <- assay(se, "counts")               
+phenotypes <- colData(se)$Phenotype          
+# Dividir los datos en grupos MSS y PD, se consideran las replicas technicas como muestras
+mss_counts <- counts[, phenotypes == "MSS"]
+pd_counts <- counts[, phenotypes == "PD"]
+
+# comparar con un test de student las medias de los fenotipos MDD y PD de cada fosfopéptido 
+p_values <- apply(counts, 1, function(x) {t.test(x[phenotypes == "MSS"], x[phenotypes == "PD"])$p.value})
+
+# Ajustar los valores p utilizando el método de la Tasa de Descubrimiento Falso (FDR)
+adjusted_p_values <- p.adjust(p_values, method = "fdr")
+
+# Calcular el cambio doblaje logarítmico entre los grupos
+logCD <- rowMeans(mss_counts) - rowMeans(pd_counts)
+
+# Compilar los resultados en un data frame
+comparison_results <- data.frame(Phosphopeptide = rownames(counts),  logCD = logCD,  P.Value = p_values,  adj.P.Val = adjusted_p_values)
+
+# Ver fosfopéptidos significativos valor p ajustado menor que 0.05
+sig_fosfo <- comparison_results[comparison_results$adj.P.Val < 0.05,]
+
+# Crear un gráfico de volcano para visualizar los fosfopéptidos significativos
+ggplot(comparison_results, aes(x = logCD, y = -log10(adj.P.Val))) +
+  geom_point(aes(color = adj.P.Val < 0.05), alpha = 0.6) +   # Colorear los puntos según significancia
+  scale_color_manual(values = c("black", "green")) +           # Negro para no significativos verde para significativos
+  labs(title = "Gráfico de Volcano Diferencias de fosfopéptidos") +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "red") + # Línea del limite 0.05
+  guides(color = guide_legend(title = "Significativo"))
+```
+
+Para visualizar estas diferencias mas claramente, filtramos los fosfopéptidosque presentan diferencias y los representamos en un grafico barras.Este gráfico de barras permite una visualización clara de cómo varía la abundancia de cada fosfopéptido entre los dos grupos. Los fosfopéptidos que muestran diferencias marcadas en abundancia entre MSS y PD podrían ser potenciales indicadores de diferencias biológicas entre los grupos y pueden ser relevantes.
+
+```{r warning=FALSE, , echo=FALSE}
+# Filtrar los fosfopéptidos significativos (valor p ajustado < 0.05)
+sig_fosfo <- comparison_results[comparison_results$adj.P.Val < 0.05, ]
+
+# Extraer los datos de fosfopéptidos significativamente deferented para ambos grupos
+significant_counts <- counts[rownames(counts) %in% sig_fosfo$Phosphopeptide, ]
+
+# Calcular las medias (MSS y PD)
+mss_means <- rowMeans(significant_counts[, phenotypes == "MSS"])
+pd_means <- rowMeans(significant_counts[, phenotypes == "PD"])
+
+# Crear un data frame 
+plot_data <- data.frame(
+  Phosphopeptide = rep(rownames(significant_counts), 2),
+  Group = rep(c("MSS", "PD"), each = nrow(significant_counts)),
+  Mean_Counts = c(mss_means, pd_means))
+
+# Gráfico de barras 
+ggplot(plot_data, aes(x = Phosphopeptide, y = Mean_Counts, fill = Group)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "Media de counts de Fosfopeptidos MSS vs PD",
+       x = "Fosfopeptidos",
+       y = "Counts") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank())  +
+  scale_fill_manual(values = c("MSS" = "blue", "PD" = "orange"))
+```
+
+
+El ultimo gráfico representa un Análisis de Componentes Principales (PCA) sobre los dos fenotipos, MSS (en azul) y PD (en naranja). Cada punto en el gráfico corresponde a una muestra individual, y su posición en el espacio bidimensional está determinada por sus valores en los dos primeros componentes principales, PC1 y PC2.
+
+Las muestras de MSS están agrupadas en el lado izquierdo del gráfico, mientras que las muestras de PD  están agrupadas hacia la derecha en el eje de PC1. Pero algunas de las muestras de PD estan hacia la izquierda tambien, 
+
+
+
+
+```{r , echo=FALSE}
+# Realizar PCA
+
+# Reordenar y limpiar datos para que no de errores
+counts_t <- t(counts)
+counts_t <- counts_t[, apply(counts_t, 2, var) != 0]
+
+# Realizar PCA en los datos 
+pca_result <- prcomp(counts_t, scale. = TRUE)
+
+# Crear un data frame con los resultados de la PCA 
+pca_data <- as.data.frame(pca_result$x)
+pca_data$Phenotype <- phenotypes  
+
+# Grafica de los resultados de la PCA (PC1 vs PC2) por fenotipo
+ggplot(pca_data, aes(x = PC1, y = PC2, color = Phenotype)) +
+  geom_point(size = 3) +
+  labs(title = "PCA de Recuentos de fosfopéptidos",
+       x = "PC1",
+       y = "PC2") +
+  theme_minimal() +
+  scale_color_manual(values = c("MSS" = "blue", "PD" = "orange")) +
+  theme(legend.position = "top")
+
+# Extraer los loadings de cada fosfopéptido en PC1
+loadings <- pca_result$rotation
+
+```
+
+Imprimimos las los factores por orden de importancia. 
+
+```{r , echo=FALSE}
+# Ordenar las cargas absolutas de PC1 en orden descendente para identificar los más importantes
+important_features_pc1 <- sort(abs(loadings[, "PC1"]), decreasing = TRUE)
+head(important_features_pc1)
+```
+
+
+
+# Discusión y limitaciones y conclusiones del estudio 
+
+Como se observa en el gráfico de PCA, el estudio presenta ciertas limitaciones. Existe un grupo de muestras que no es fácilmente distinguible en los componentes principales PC1 o PC2, lo cual puede deberse al número reducido de muestras analizadas. Para intentar mejorar la diferenciación, hemos considerado las réplicas como muestras independientes; sin embargo, esto introduce un posible sesgo, ya que las réplicas son muy similares entre sí, como se puede ver en el gráfico.
+
+Este resultado indica que la mayor parte de la variabilidad observada es de carácter biológico, y que algunas muestras podrían clasificarse incorrectamente si solo se emplea esta técnica de análisis. Esto sugiere que sería necesario complementar el PCA con otras técnicas o aumentar el número de muestras para obtener una clasificación más robusta y precisa.
+
+# Direccion del repositorio Git
+
+[https://github.com/acarrascalmi/CARRASCAL-Minino-Amaia-PEC1](https://github.com/acarrascalmi/CARRASCAL-Minino-Amaia-PEC1)
